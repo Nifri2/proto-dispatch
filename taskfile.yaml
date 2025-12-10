@@ -1,0 +1,97 @@
+version: '3'
+
+vars:
+  # Change these variables to match your project
+  TINYGO_TARGET: pico2
+
+tasks:
+  _build:
+    internal: true
+    cmds:
+      - |
+        mkdir -p build
+        echo "Building {{.ROLE}} ({{.ADDRESS}})"
+        tinygo build -o build/{{.ROLE}}-{{.ADDRESS}}.elf -target={{.TINYGO_TARGET}} \
+        -ldflags="-X main.buildRole={{.ROLE}} -X main.buildAddress={{.ADDRESS}}" .
+
+  _flash:
+    internal: true
+    cmds:
+      - task: _build
+        vars:
+          ROLE: '{{.ROLE}}'
+          ADDRESS: '{{.ADDRESS}}'
+      - tinygo flash -target={{.TINYGO_TARGET}} -ldflags="-X main.buildRole={{.ROLE}} -X main.buildAddress={{.ADDRESS}}" . -monitor
+
+  build:dispatcher:
+    desc: "Builds dispatcher firmware"
+    cmds:
+      - task: _build
+        vars: {ROLE: dispatcher, ADDRESS: dispatch}
+
+  build:worker-0:
+    desc: "Builds worker-0 firmware"
+    cmds:
+      - task: _build
+        vars: {ROLE: worker, ADDRESS: worker-0}
+
+  build:worker-1:
+    desc: "Builds worker-1 firmware"
+    cmds:
+      - task: _build
+        vars: {ROLE: worker, ADDRESS: worker-1}
+
+  build:worker-2:
+    desc: "Builds worker-2 firmware"
+    cmds:
+      - task: _build
+        vars: {ROLE: worker, ADDRESS: worker-2}
+
+  build:worker-3:
+    desc: "Builds worker-3 firmware"
+    cmds:
+      - task: _build
+        vars: {ROLE: worker, ADDRESS: worker-3}
+
+  build:all:
+    desc: "Builds all firmwares"
+    cmds:
+      - task: build:dispatcher
+      - task: build:worker-0
+      - task: build:worker-1
+      - task: build:worker-2
+      - task: build:worker-3
+
+  flash:dispatcher:
+    desc: "Flashes dispatcher firmware"
+    cmds:
+      - task: _flash
+        vars: {ROLE: dispatcher, ADDRESS: dispatch}
+
+  flash:worker-0:
+    desc: "Flashes worker-0 firmware"
+    cmds:
+      - task: _flash
+        vars: {ROLE: worker, ADDRESS: worker-0}
+
+  flash:worker-1:
+    desc: "Flashes worker-1 firmware"
+    cmds:
+      - task: _flash
+        vars: {ROLE: worker, ADDRESS: worker-1}
+
+  flash:worker-2:
+    desc: "Flashes worker-2 firmware"
+    cmds:
+      - task: _flash
+        vars: {ROLE: worker, ADDRESS: worker-2}
+
+  flash:worker-3:
+    desc: "Flashes worker-3 firmware"
+    cmds:
+      - task: _flash
+        vars: {ROLE: worker, ADDRESS: worker-3}
+
+  monitor:
+    cmds:
+      - tinygo monitor
