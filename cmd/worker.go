@@ -66,7 +66,7 @@ func displayAnimation(animChan chan *Animation) {
 	// nifriAnim := findAnim("nifri")
 	// spinnyAnim := findAnim("spinnylambda")
 
-	// Logic from old.logic, but using GP2 and GP3 to avoid UART conflict
+	// Logic from old logic, but using GP2 and GP3 to avoid UART conflict
 	ledPin1 := machine.GP2
 	ledPin1.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	strip1 := ws2812.New(ledPin1)

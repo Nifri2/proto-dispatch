@@ -11,18 +11,28 @@ type Address int
 
 const (
 	Dispatch Address = 0x00 + iota
-	Worker_0
-	Worker_1
-	Worker_2
-	Worker_3
+	Worker_0         // 0x01
+	Worker_1         // 0x02
+	Worker_2         // 0x03
+	Worker_3         // 0x04
 )
 
 type Command int
 
 const (
-	Cmd_NoOp Command = 0x00 + iota
-	Cmd_LedOn
-	Cmd_LedOff
+	Cmd_NoOp   Command = 0x00 + iota
+	Cmd_LedOn          // 0x01
+	Cmd_LedOff         // 0x02
+)
+
+type AnimationID int
+
+const (
+	Anim_EyeIdle      AnimationID = 0x00 + iota
+	Anim_EyeBlink                 // 0x01
+	Anim_MouthIdle                // 0x02
+	Anim_Nifri                    // 0x03
+	Anim_SpinnyLambda             // 0x04
 )
 
 type Settings struct {

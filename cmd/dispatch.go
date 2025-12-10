@@ -24,14 +24,15 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 		time.Sleep(delay)
 		led.Low()
 
-		// Worker 2 LED ON
-		uart.Write([]byte{byte(Worker_2), byte(Cmd_LedOn)})
+		// Worker 1 eye idle
+		uart.Write([]byte{byte(Worker_1), byte(Anim_EyeIdle)})
 		time.Sleep(delay)
 		led.High()
 
-		// Worker 2 LED OFF
-		uart.Write([]byte{byte(Worker_2), byte(Cmd_LedOff)})
+		// worker 1 eye blink
+		uart.Write([]byte{byte(Worker_1), byte(Anim_EyeBlink)})
 		time.Sleep(delay)
 		led.Low()
+
 	}
 }
