@@ -31,36 +31,34 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	}()
 
 	// Workers to control
-	// workers := []Address{Worker_0, Worker_1, Worker_2, Worker_3}
 	var workers []Address = []Address{Worker_0, Worker_1}
 
-	for _, w := range workers {
-		go func(workerAddr Address) {
-			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerAddr)))
+	r := rand.New(rand.NewSource(time.Now().UnixNano())) // Single random source for the dispatcher
 
-			// Init to Idle
-			// Protocol: [address, command, animID_eye, animID_mouth]
-			uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
-
-			for {
-				// Random sleep 2-6 seconds
-				sleepDuration := time.Duration(2000+r.Intn(4001)) * time.Millisecond
-				time.Sleep(sleepDuration)
-
-				// Send Blink
-				// fmt.Printf("Blinking Worker %d\n", workerAddr)
-				uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeBlink), byte(Anim_MouthIdle)}
-
-				// Blink duration (50 frames at ProjectedFPS
-				blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
-				time.Sleep(blinkDuration)
-
-				// Send Idle
-				uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
-			}
-		}(w)
+	// Initialize all workers to Idle
+	for _, workerAddr := range workers {
+		uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
 	}
 
-	// Block forever
-	select {}
+	for {
+		// Calculate a single random sleep duration for all workers
+		sleepDuration := time.Duration(2000+r.Intn(4001)) * time.Millisecond
+		time.Sleep(sleepDuration)
+
+		// Send Blink command to all workers
+		for _, workerAddr := range workers {
+			uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeBlink), byte(Anim_MouthIdle)}
+			fmt.Println("Sent to worker", workerAddr, "to blink")
+		}
+
+		// Blink duration (50 frames at ProjectedFPS)
+		blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
+		time.Sleep(blinkDuration)
+
+		// Send Idle command to all workers
+		for _, workerAddr := range workers {
+			uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
+		}
+	}
+	// The `RunDispatcher` function now contains an infinite loop, so `select {}` is not needed.
 }

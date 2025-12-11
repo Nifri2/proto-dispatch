@@ -26,8 +26,8 @@ func RunWorker(config Settings, uart *machine.UART, led machine.Pin) {
 			cmdByte, _ := uart.ReadByte()
 			eyeIdxByte, _ := uart.ReadByte()
 			mouthIdxByte, _ := uart.ReadByte()
-			// msg := fmt.Sprintf("Rx: Addr=%x Cmd=%x Eye=%x Mouth=%x\n", addrByte, cmdByte, eyeIdxByte, mouthIdxByte)
-			// fmt.Print(msg)
+			msg := fmt.Sprintf("Rx: Addr=%x Cmd=%x Eye=%x Mouth=%x\n", addrByte, cmdByte, eyeIdxByte, mouthIdxByte)
+			fmt.Print(msg)
 
 			// Only react if packet is for this worker
 			if Address(addrByte) == config.Address {
@@ -90,19 +90,18 @@ func displayAnimation(animChan chan animUpdate) {
 	eyeIdleAnim := findAnim("eye_idle")
 	mouthAnim := findAnim("mouth_idle")
 
-	// Logic from old.logic, but using GP2 and GP3 to avoid UART conflict
-	ledPin1 := machine.GP2
+	// we need to use GPIO far away from UART pins to avoid chatter
+	// we use GP17 for eye and GP16 for mouth
+	ledPin1 := machine.GP17
 	ledPin1.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	strip1 := ws2812.New(ledPin1)
 
-	ledPin2 := machine.GP3
+	ledPin2 := machine.GP16
 	ledPin2.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	strip2 := ws2812.New(ledPin2)
 
 	var currentEyeAnim *Animation
 	var currentMouthAnim *Animation
-	var queuedEyeAnim *Animation = nil
-	var queuedMouthAnim *Animation = nil
 
 	// Initial setup for currentEyeAnim
 	if eyeIdleAnim == nil {
@@ -129,11 +128,15 @@ func displayAnimation(animChan chan animUpdate) {
 		// Check for new animation command
 		select {
 		case update := <-animChan:
-			if update.Eye != nil {
-				queuedEyeAnim = update.Eye
+			if update.Eye != nil && update.Eye != currentEyeAnim {
+				fmt.Printf("Switching Eye to: %s\n", update.Eye.Name)
+				currentEyeAnim = update.Eye
+				eyeFrameCounter = 0
 			}
-			if update.Mouth != nil {
-				queuedMouthAnim = update.Mouth
+			if update.Mouth != nil && update.Mouth != currentMouthAnim {
+				fmt.Printf("Switching Mouth to: %s\n", update.Mouth.Name)
+				currentMouthAnim = update.Mouth
+				mouthFrameCounter = 0
 			}
 		default:
 		}
@@ -160,25 +163,6 @@ func displayAnimation(animChan chan animUpdate) {
 
 		eyeFrameCounter++
 		mouthFrameCounter++
-
-		// Check for queued animations and transition
-		if queuedEyeAnim != nil && currentEyeAnim != nil && eyeFrameCounter > 0 && (currentEyeAnim.FrameCount > 0 && eyeFrameCounter%int64(currentEyeAnim.FrameCount) == 0) {
-			if queuedEyeAnim != currentEyeAnim { // Only switch if new animation is different
-				fmt.Printf("Transitioning Eye to: %s\n", queuedEyeAnim.Name)
-				currentEyeAnim = queuedEyeAnim
-				eyeFrameCounter = 0
-			}
-			queuedEyeAnim = nil // Clear the queue
-		}
-
-		if queuedMouthAnim != nil && currentMouthAnim != nil && mouthFrameCounter > 0 && (currentMouthAnim.FrameCount > 0 && mouthFrameCounter%int64(currentMouthAnim.FrameCount) == 0) {
-			if queuedMouthAnim != currentMouthAnim { // Only switch if new animation is different
-				fmt.Printf("Transitioning Mouth to: %s\n", queuedMouthAnim.Name)
-				currentMouthAnim = queuedMouthAnim
-				mouthFrameCounter = 0
-			}
-			queuedMouthAnim = nil // Clear the queue
-		}
 
 		// Yield to allow other goroutines (like UART) to run if needed
 		time.Sleep(10 * time.Millisecond)
