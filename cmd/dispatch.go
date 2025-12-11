@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	ProjectedFPS = 47
+)
+
 // Reworked Protocol to support 2 animation channels (eye + mouth)
 // Example: [address, command, animID_eye, animID_mouth]
 
@@ -27,13 +31,15 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	}()
 
 	// Workers to control
-	workers := []Address{Worker_0, Worker_1, Worker_2, Worker_3}
+	// workers := []Address{Worker_0, Worker_1, Worker_2, Worker_3}
+	var workers []Address = []Address{Worker_0, Worker_1}
 
 	for _, w := range workers {
 		go func(workerAddr Address) {
 			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerAddr)))
 
 			// Init to Idle
+			// Protocol: [address, command, animID_eye, animID_mouth]
 			uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
 
 			for {
@@ -45,8 +51,9 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 				// fmt.Printf("Blinking Worker %d\n", workerAddr)
 				uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeBlink), byte(Anim_MouthIdle)}
 
-				// Blink duration (approx)
-				time.Sleep(200 * time.Millisecond)
+				// Blink duration (50 frames at ProjectedFPS
+				blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
+				time.Sleep(blinkDuration)
 
 				// Send Idle
 				uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
