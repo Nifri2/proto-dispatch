@@ -20,9 +20,10 @@ const (
 type Command int
 
 const (
-	Cmd_NoOp   Command = 0x00 + iota
-	Cmd_LedOn          // 0x01
-	Cmd_LedOff         // 0x02
+	Cmd_NoOp        Command = 0x00 + iota
+	Cmd_LedOn               // 0x01
+	Cmd_LedOff              // 0x02
+	Cmd_DisplayAnim         // 0x03
 )
 
 type AnimationID int
@@ -55,3 +56,8 @@ const (
 	MouthFrameWidth  = 32
 	MouthFrameHeight = 16
 )
+
+type animUpdate struct {
+	Eye   *Animation
+	Mouth *Animation
+}

@@ -1,10 +1,10 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"machine"
 	"time"
-	_ "embed"
 
 	"nifri2/proto-dispatch/cmd"
 )
@@ -54,18 +54,22 @@ func main() {
 	if err != nil {
 		fmt.Println("Error loading eye_blink:", err)
 	}
+
 	eyeIdleAnim, err := cmd.LoadAnimation(eyeIdleData, cmd.EyeFrameWidth, cmd.EyeFrameHeight, "eye_idle")
 	if err != nil {
 		fmt.Println("Error loading eye_idle:", err)
 	}
+
 	mouthAnim, err := cmd.LoadAnimation(mouthIdleData, cmd.MouthFrameWidth, cmd.MouthFrameHeight, "mouth_idle")
 	if err != nil {
 		fmt.Println("Error loading mouth_idle:", err)
 	}
+
 	nifriAnim, err := cmd.LoadAnimation(nifriData, cmd.EyeFrameWidth, cmd.EyeFrameHeight, "nifri")
 	if err != nil {
 		fmt.Println("Error loading nifri:", err)
 	}
+
 	spinnyAnim, err := cmd.LoadAnimation(spinnylambdaData, cmd.EyeFrameWidth, cmd.EyeFrameHeight, "spinnylambda")
 	if err != nil {
 		fmt.Println("Error loading spinnylambda:", err)
@@ -73,11 +77,11 @@ func main() {
 
 	// Populate global array in cmd package
 	cmd.LoadedAnimations = nil
-	if eyeBlinkAnim != nil {
-		cmd.LoadedAnimations = append(cmd.LoadedAnimations, eyeBlinkAnim)
-	}
 	if eyeIdleAnim != nil {
 		cmd.LoadedAnimations = append(cmd.LoadedAnimations, eyeIdleAnim)
+	}
+	if eyeBlinkAnim != nil {
+		cmd.LoadedAnimations = append(cmd.LoadedAnimations, eyeBlinkAnim)
 	}
 	if mouthAnim != nil {
 		cmd.LoadedAnimations = append(cmd.LoadedAnimations, mouthAnim)

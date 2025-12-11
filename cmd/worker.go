@@ -3,34 +3,65 @@ package cmd
 import (
 	"fmt"
 	"machine"
-	"math/rand"
 	"time"
 
 	"tinygo.org/x/drivers/ws2812"
 )
 
+// Each MCU takes care of 1 mouth and 1 eye WS2812 strip
+// There will be a sperate worker that will only display Insignia animations
+
+type animUpdate struct {
+	Eye   *Animation
+	Mouth *Animation
+}
+
 func RunWorker(config Settings, uart *machine.UART, led machine.Pin) {
 	// Listen for commands from Dispatcher
 	fmt.Println("Starting Worker Loop")
 
-	animChan := make(chan *Animation, 1)
+	animChan := make(chan animUpdate, 1)
 
 	// Start animation routine in background
 	go displayAnimation(animChan)
 
 	for {
-		if uart.Buffered() >= 2 {
-			addr, _ := uart.ReadByte()
-			animIdx, _ := uart.ReadByte()
-			fmt.Printf("Received Addr: %d AnimID: %d\n", addr, animIdx)
+		if uart.Buffered() >= 4 {
+			addrByte, _ := uart.ReadByte()
+			cmdByte, _ := uart.ReadByte()
+			eyeIdxByte, _ := uart.ReadByte()
+			mouthIdxByte, _ := uart.ReadByte()
 
 			// Only react if packet is for this worker
-			if Address(addr) == config.Address {
-				idx := int(animIdx)
-				if idx >= 0 && idx < len(LoadedAnimations) {
-					animChan <- LoadedAnimations[idx]
-				} else {
-					fmt.Printf("Invalid animation index: %d\n", idx)
+			if Address(addrByte) == config.Address {
+				cmd := Command(cmdByte)
+				// fmt.Printf("Rx: Cmd=%d Eye=%d Mouth=%d\n", cmd, eyeIdxByte, mouthIdxByte)
+
+				switch cmd {
+				case Cmd_LedOn:
+					led.High()
+				case Cmd_LedOff:
+					led.Low()
+				case Cmd_NoOp:
+					// No operation
+				case Cmd_DisplayAnim:
+					eyeIdx := int(eyeIdxByte)
+					mouthIdx := int(mouthIdxByte)
+
+					var update animUpdate
+
+					if eyeIdx >= 0 && eyeIdx < len(LoadedAnimations) {
+						update.Eye = LoadedAnimations[eyeIdx]
+					}
+
+					if mouthIdx >= 0 && mouthIdx < len(LoadedAnimations) {
+						update.Mouth = LoadedAnimations[mouthIdx]
+					}
+
+					// Send update if we have at least one valid animation
+					if update.Eye != nil || update.Mouth != nil {
+						animChan <- update
+					}
 				}
 			}
 		}
@@ -39,16 +70,18 @@ func RunWorker(config Settings, uart *machine.UART, led machine.Pin) {
 	}
 }
 
-func displayAnimation(animChan chan *Animation) {
+// TODOS:
+// - Add Functionality to display 2 animations (eye + mouth), need to modify command protocol
+// 	- - Currently only 1 animation channel is supported
+//  - - Since 1 MCU handles both eye and mouth at a stabkle 47hz we use 2 strips at 2 different pins
+// - Implement all Commands (LED on/off, NoOp, etc) Esp. Cmd_DisplayAnim
+
+func displayAnimation(animChan chan animUpdate) {
 	// Wait for the board to stabilize
-	// time.Sleep(2 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// Defaults if loading failed (or empty)
 	// We assume LoadedAnimations is populated by main before calling RunWorker
-	// But we need to find the specific animations by name or index?
-	// The original code used specific variables: eyeBlinkAnim, etc.
-	// Since we now have a global LoadedAnimations, we need to pick from it.
-	// However, the logic relies on knowing which one is "eye_idle" vs "eye_blink".
 
 	// Helper to find animation by name
 	findAnim := func(name string) *Animation {
@@ -60,13 +93,12 @@ func displayAnimation(animChan chan *Animation) {
 		return nil
 	}
 
-	eyeBlinkAnim := findAnim("eye_blink")
 	eyeIdleAnim := findAnim("eye_idle")
 	mouthAnim := findAnim("mouth_idle")
 	// nifriAnim := findAnim("nifri")
 	// spinnyAnim := findAnim("spinnylambda")
 
-	// Logic from old logic, but using GP2 and GP3 to avoid UART conflict
+	// Logic from old.logic, but using GP2 and GP3 to avoid UART conflict
 	ledPin1 := machine.GP2
 	ledPin1.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	strip1 := ws2812.New(ledPin1)
@@ -74,19 +106,6 @@ func displayAnimation(animChan chan *Animation) {
 	ledPin2 := machine.GP3
 	ledPin2.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	strip2 := ws2812.New(ledPin2)
-
-	blinkChannel := make(chan bool, 1)
-	go func() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		for {
-			sleepDuration := time.Duration(5000+r.Intn(2001)) * time.Millisecond
-			time.Sleep(sleepDuration)
-			select {
-			case blinkChannel <- true:
-			default:
-			}
-		}
-	}()
 
 	baseAnim := eyeIdleAnim
 	if baseAnim == nil {
@@ -111,24 +130,18 @@ func displayAnimation(animChan chan *Animation) {
 	for {
 		// Check for new animation command
 		select {
-		case newAnim := <-animChan:
-			fmt.Printf("Switching animation to: %s\n", newAnim.Name)
-			baseAnim = newAnim
-			currentEyeAnim = baseAnim
-			eyeFrameCounter = 0
-		case <-blinkChannel:
-			// Only blink if we are in the idle state
-			if eyeBlinkAnim != nil && baseAnim == eyeIdleAnim && currentEyeAnim != eyeBlinkAnim {
-				currentEyeAnim = eyeBlinkAnim
+		case update := <-animChan:
+			if update.Eye != nil && update.Eye != currentEyeAnim {
+				fmt.Printf("Switching Eye to: %s\n", update.Eye.Name)
+				currentEyeAnim = update.Eye
 				eyeFrameCounter = 0
 			}
+			if update.Mouth != nil && update.Mouth != currentMouthAnim {
+				fmt.Printf("Switching Mouth to: %s\n", update.Mouth.Name)
+				currentMouthAnim = update.Mouth
+				mouthFrameCounter = 0
+			}
 		default:
-		}
-
-		// If blinking finished, return to base animation
-		if currentEyeAnim == eyeBlinkAnim && eyeFrameCounter >= int64(currentEyeAnim.FrameCount) {
-			currentEyeAnim = baseAnim
-			eyeFrameCounter = 0
 		}
 
 		// Safety check for nil animations if load failed

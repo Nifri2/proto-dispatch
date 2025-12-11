@@ -3,36 +3,57 @@ package cmd
 import (
 	"fmt"
 	"machine"
+	"math/rand"
 	"time"
 )
 
+// Reworked Protocol to support 2 animation channels (eye + mouth)
+// Example: [address, command, animID_eye, animID_mouth]
+
 func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
-	// Send commands to Workers
-	// Worker 1 LED On wait for 1 second LED Off repeat for Worker 2, back to Worker 1
 	fmt.Println("Starting Dispatcher Loop")
 
-	delay := time.Millisecond * 10
+	// Channel to serialize UART writes
+	// stores [4]byte{address, command, animID_eye, animID_mouth}
+	uartChan := make(chan [4]byte, 10)
 
-	for {
-		// Worker 1 LED ON
-		uart.Write([]byte{byte(Worker_1), byte(Cmd_LedOn)})
-		time.Sleep(delay)
-		led.High()
+	// Goroutine to handle UART writes
+	go func() {
+		for packet := range uartChan {
+			uart.Write(packet[:])
+			// Small delay between writes to ensure receiver can keep up if needed
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
 
-		// Worker 1 LED OFF
-		uart.Write([]byte{byte(Worker_1), byte(Cmd_LedOff)})
-		time.Sleep(delay)
-		led.Low()
+	// Workers to control
+	workers := []Address{Worker_0, Worker_1, Worker_2, Worker_3}
 
-		// Worker 1 eye idle
-		uart.Write([]byte{byte(Worker_1), byte(Anim_EyeIdle)})
-		time.Sleep(delay)
-		led.High()
+	for _, w := range workers {
+		go func(workerAddr Address) {
+			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerAddr)))
 
-		// worker 1 eye blink
-		uart.Write([]byte{byte(Worker_1), byte(Anim_EyeBlink)})
-		time.Sleep(delay)
-		led.Low()
+			// Init to Idle
+			uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
 
+			for {
+				// Random sleep 2-6 seconds
+				sleepDuration := time.Duration(2000+r.Intn(4001)) * time.Millisecond
+				time.Sleep(sleepDuration)
+
+				// Send Blink
+				// fmt.Printf("Blinking Worker %d\n", workerAddr)
+				uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeBlink), byte(Anim_MouthIdle)}
+
+				// Blink duration (approx)
+				time.Sleep(200 * time.Millisecond)
+
+				// Send Idle
+				uartChan <- [4]byte{byte(workerAddr), byte(Cmd_DisplayAnim), byte(Anim_EyeIdle), byte(Anim_MouthIdle)}
+			}
+		}(w)
 	}
+
+	// Block forever
+	select {}
 }
