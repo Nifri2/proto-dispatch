@@ -43,32 +43,37 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	// Workers to control
 	workers := []Address{Worker_0, Worker_1, Worker_2, Worker_3}
 
-	for _, w := range workers {
-		go func(workerAddr Address) {
-			r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerAddr)))
+	for _, workerAddr := range workers {
+		sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeIdle, Anim_MouthIdle)
+	}
 
-			// Init to Idle
+	for {
+
+		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(1)))
+
+		// Init to Idle
+
+		// Random sleep 2-6 seconds
+		sleepDuration := time.Duration(2000+r.Intn(4001)) * time.Millisecond
+		time.Sleep(sleepDuration)
+
+		for _, workerAddr := range workers {
+			sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeBlink, Anim_MouthIdle)
+		}
+
+		// Send Blink
+		// fmt.Printf("Blinking Worker %d\n", workerAddr)
+
+		// Blink duration = 50 frames at ProjectedFPS
+
+		blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
+		time.Sleep(blinkDuration)
+		// time.Sleep(200 * time.Millisecond)
+
+		// Send Idle
+		for _, workerAddr := range workers {
 			sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeIdle, Anim_MouthIdle)
-
-			for {
-				// Random sleep 2-6 seconds
-				sleepDuration := time.Duration(2000+r.Intn(4001)) * time.Millisecond
-				time.Sleep(sleepDuration)
-
-				// Send Blink
-				// fmt.Printf("Blinking Worker %d\n", workerAddr)
-				sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeBlink, Anim_MouthIdle)
-
-				// Blink duration = 50 frames at ProjectedFPS
-
-				blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
-				time.Sleep(blinkDuration)
-				// time.Sleep(200 * time.Millisecond)
-
-				// Send Idle
-				sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeIdle, Anim_MouthIdle)
-			}
-		}(w)
+		}
 
 	}
 
