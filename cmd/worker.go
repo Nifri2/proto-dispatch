@@ -20,50 +20,85 @@ func RunWorker(config Settings, uart *machine.UART, led machine.Pin) {
 	// Start animation routine in background
 	go displayAnimation(animChan)
 
+	const (
+		HeaderByte = 0xAA
+		PacketSize = 6
+	)
+
+	// Buffer to hold incoming packet
+	// [Header, Addr, Cmd, Eye, Mouth, Checksum]
+	buf := make([]byte, PacketSize)
+	bufIdx := 0
+
 	for {
-		if uart.Buffered() >= 4 {
-			addrByte, _ := uart.ReadByte()
-			cmdByte, _ := uart.ReadByte()
-			eyeIdxByte, _ := uart.ReadByte()
-			mouthIdxByte, _ := uart.ReadByte()
-			msg := fmt.Sprintf("Rx: Addr=%x Cmd=%x Eye=%x Mouth=%x\n", addrByte, cmdByte, eyeIdxByte, mouthIdxByte)
-			fmt.Print(msg)
+		if uart.Buffered() > 0 {
+			b, _ := uart.ReadByte()
 
-			// Only react if packet is for this worker
-			if Address(addrByte) == config.Address {
-				cmd := Command(cmdByte)
-				// fmt.Printf("Rx: Cmd=%d Eye=%d Mouth=%d\n", cmd, eyeIdxByte, mouthIdxByte)
+			// State machine-ish logic
+			if bufIdx == 0 {
+				// Waiting for Header
+				if b == HeaderByte {
+					buf[0] = b
+					bufIdx++
+				}
+			} else {
+				// Filling buffer
+				buf[bufIdx] = b
+				bufIdx++
 
-				switch cmd {
-				case Cmd_LedOn:
-					led.High()
-				case Cmd_LedOff:
-					led.Low()
-				case Cmd_NoOp:
-					// No operation
-				case Cmd_DisplayAnim:
-					eyeIdx := int(eyeIdxByte)
-					mouthIdx := int(mouthIdxByte)
+				if bufIdx == PacketSize {
+					// Packet complete, verify checksum
+					// Checksum = Addr + Cmd + Eye + Mouth
+					// buf = [AA, Addr, Cmd, Eye, Mouth, Checksum]
+					addrByte := buf[1]
+					cmdByte := buf[2]
+					eyeByte := buf[3]
+					mouthByte := buf[4]
+					checksumByte := buf[5]
 
-					var update animUpdate
+					calculatedChecksum := addrByte + cmdByte + eyeByte + mouthByte
 
-					if eyeIdx >= 0 && eyeIdx < len(LoadedAnimations) {
-						update.Eye = LoadedAnimations[eyeIdx]
+					if calculatedChecksum == checksumByte {
+						// Valid packet
+						// fmt.Printf("Rx: Cmd=%x Eye=%x Mouth=%x\n", cmdByte, eyeByte, mouthByte)
+
+						if Address(addrByte) == config.Address {
+							cmd := Command(cmdByte)
+							switch cmd {
+							case Cmd_LedOn:
+								led.High()
+							case Cmd_LedOff:
+								led.Low()
+							case Cmd_NoOp:
+								// NoOp
+							case Cmd_DisplayAnim:
+								eyeIdx := int(eyeByte)
+								mouthIdx := int(mouthByte)
+								var update animUpdate
+
+								if eyeIdx >= 0 && eyeIdx < len(LoadedAnimations) {
+									update.Eye = LoadedAnimations[eyeIdx]
+								}
+								if mouthIdx >= 0 && mouthIdx < len(LoadedAnimations) {
+									update.Mouth = LoadedAnimations[mouthIdx]
+								}
+								if update.Eye != nil || update.Mouth != nil {
+									animChan <- update
+								}
+							}
+						}
+					} else {
+						fmt.Printf("Checksum mismatch: calc %x != recv %x\n", calculatedChecksum, checksumByte)
 					}
 
-					if mouthIdx >= 0 && mouthIdx < len(LoadedAnimations) {
-						update.Mouth = LoadedAnimations[mouthIdx]
-					}
-
-					// Send update if we have at least one valid animation
-					if update.Eye != nil || update.Mouth != nil {
-						animChan <- update
-					}
+					// Reset buffer
+					bufIdx = 0
 				}
 			}
+		} else {
+			// Small sleep to yield
+			time.Sleep(time.Millisecond)
 		}
-		// Small sleep to yield if loop is tight, though Buffered() check is fast
-		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -91,8 +126,8 @@ func displayAnimation(animChan chan animUpdate) {
 	mouthAnim := findAnim("mouth_idle")
 
 	// we need to use GPIO far away from UART pins to avoid chatter
-	// we use GP17 for eye and GP16 for mouth
-	ledPin1 := machine.GP17
+	// we use GP2 for eye and GP16 for mouth
+	ledPin1 := machine.GP2
 	ledPin1.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	strip1 := ws2812.New(ledPin1)
 

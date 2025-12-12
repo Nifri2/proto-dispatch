@@ -41,7 +41,7 @@ func main() {
 	var uart *machine.UART = machine.UART0
 
 	uart.Configure(machine.UARTConfig{
-		BaudRate: 115200,
+		BaudRate: 38400,
 		TX:       machine.GP0,
 		RX:       machine.GP1,
 	})
