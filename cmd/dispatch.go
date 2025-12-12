@@ -17,6 +17,9 @@ const (
 func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	fmt.Println("Starting Dispatcher Loop")
 
+	// Configure Watchdog (5s timeout)
+	machine.Watchdog.Configure(machine.WatchdogConfig{TimeoutMillis: 5000})
+
 	// Channel to serialize UART writes
 	// stores [6]byte{header, address, command, animID_eye, animID_mouth, checksum}
 	uartChan := make(chan [6]byte, 10)
@@ -24,8 +27,6 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	// Goroutine to handle UART writes
 	go func() {
 		for packet := range uartChan {
-			// Small delay between writes to ensure receiver can keep up if needed                                                                                                                                                                                                              │
-			// time.Sleep(5 * time.Millisecond)
 			uart.Write(packet[:])
 		}
 	}()
@@ -43,15 +44,14 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	// Workers to control
 	workers := []Address{Worker_0, Worker_1, Worker_2, Worker_3}
 
-	for _, workerAddr := range workers {
-		sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeIdle, Anim_MouthIdle)
-	}
+	// Initialize random number generator once
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	inter := 0 // Counter for 'still alive' messages
+
+	// Main Dispatcher Loop (user's desired logic)
 	for {
-
-		r := rand.New(rand.NewSource(time.Now().UnixNano() + int64(1)))
-
-		// Init to Idle
+		machine.Watchdog.Update() // Feed watchdog
 
 		// Random sleep 2-6 seconds
 		sleepDuration := time.Duration(2000+r.Intn(4001)) * time.Millisecond
@@ -61,22 +61,16 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 			sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeBlink, Anim_MouthIdle)
 		}
 
-		// Send Blink
-		// fmt.Printf("Blinking Worker %d\n", workerAddr)
-
 		// Blink duration = 50 frames at ProjectedFPS
-
 		blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
 		time.Sleep(blinkDuration)
-		// time.Sleep(200 * time.Millisecond)
 
 		// Send Idle
 		for _, workerAddr := range workers {
 			sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeIdle, Anim_MouthIdle)
 		}
 
+		inter++
+		fmt.Println("still alive", inter)
 	}
-
-	// Block forever
-	select {}
 }

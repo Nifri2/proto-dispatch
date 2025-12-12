@@ -15,6 +15,9 @@ func RunWorker(config Settings, uart *machine.UART, led machine.Pin) {
 	// Listen for commands from Dispatcher
 	fmt.Println("Starting Worker Loop")
 
+	// Configure Watchdog (5s timeout)
+	machine.Watchdog.Configure(machine.WatchdogConfig{TimeoutMillis: 5000})
+
 	animChan := make(chan animUpdate, 1)
 
 	// Start animation routine in background
@@ -30,7 +33,16 @@ func RunWorker(config Settings, uart *machine.UART, led machine.Pin) {
 	buf := make([]byte, PacketSize)
 	bufIdx := 0
 
+	var loopCounter int
+
 	for {
+		// Feed watchdog approx every second (1000 * 1ms sleep)
+		loopCounter++
+		if loopCounter > 1000 {
+			machine.Watchdog.Update()
+			loopCounter = 0
+		}
+
 		if uart.Buffered() > 0 {
 			b, _ := uart.ReadByte()
 
