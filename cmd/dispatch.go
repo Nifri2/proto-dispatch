@@ -24,9 +24,9 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 	// Goroutine to handle UART writes
 	go func() {
 		for packet := range uartChan {
+			// Small delay between writes to ensure receiver can keep up if needed                                                                                                                                                                                                              │
+			// time.Sleep(5 * time.Millisecond)
 			uart.Write(packet[:])
-			// Small delay between writes to ensure receiver can keep up if needed
-			time.Sleep(5 * time.Millisecond)
 		}
 	}()
 
@@ -59,8 +59,11 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 				// fmt.Printf("Blinking Worker %d\n", workerAddr)
 				sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeBlink, Anim_MouthIdle)
 
-				// Blink duration (approx)
-				time.Sleep(200 * time.Millisecond)
+				// Blink duration = 50 frames at ProjectedFPS
+
+				blinkDuration := time.Duration(50*1000/ProjectedFPS) * time.Millisecond
+				time.Sleep(blinkDuration)
+				// time.Sleep(200 * time.Millisecond)
 
 				// Send Idle
 				sendPacket(workerAddr, Cmd_DisplayAnim, Anim_EyeIdle, Anim_MouthIdle)
