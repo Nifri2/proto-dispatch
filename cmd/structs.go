@@ -36,6 +36,10 @@ const (
 	Anim_SpinnyLambda             // 0x04
 )
 
+// Complete Protocol Packet:
+// [Header(0xAA), Address, Command, AnimID_Eye, AnimID_Mouth, Checksum]
+// Checksum = Address + Command + AnimID_Eye + AnimID_Mouth
+
 type Settings struct {
 	Role    Role
 	Address Address
