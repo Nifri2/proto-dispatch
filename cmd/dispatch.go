@@ -102,7 +102,7 @@ func RunDispatcher(config Settings, uart *machine.UART, led machine.Pin) {
 
 			// 2. Wait up to 1 second for second press
 			var p2 int = -1
-			timeout := time.Now().Add(1 * time.Second)
+			timeout := time.Now().Add(500 * time.Millisecond)
 			for time.Now().Before(timeout) {
 				p := getPressedPin()
 				if p != -1 {
